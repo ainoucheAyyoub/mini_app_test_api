@@ -1,3 +1,6 @@
+import 'dart:io';
+
+import 'package:dio/dio.dart';
 import 'package:flutter/material.dart';
 import 'package:mini_projet/modules/events.dart';
 import 'package:mini_projet/services/envents_services.dart';
@@ -18,13 +21,37 @@ class _HomeScreenState extends State<HomeScreen> {
   String? errorMessage;
 
   DateTime? _fromDate; //   to store the start date
-  DateTime? _toDate; //  to store the end date
+  DateTime? _toDate; //    to store the end date
+
+  int _successCount = 0;
+  int _errorCount = 0;
+  int _warningCount = 0;
+  int _totalEvents = 0;
 
   @override
   void initState() {
     super.initState();
+    _loadCountsFromLocalStorage(); // Load counts first
     loadEventsFromLocalStorage();
     _loadFilterDates(); // used to load the selected dates
+  }
+
+  Future<void> _loadCountsFromLocalStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    setState(() {
+      _successCount = prefs.getInt('successCount') ?? 0;
+      _errorCount = prefs.getInt('errorCount') ?? 0;
+      _warningCount = prefs.getInt('warningCount') ?? 0;
+      _totalEvents = prefs.getInt('totalEvents') ?? 0;
+    });
+  }
+
+  Future<void> _saveCountsToLocalStorage() async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt('successCount', _successCount);
+    await prefs.setInt('errorCount', _errorCount);
+    await prefs.setInt('warningCount', _warningCount);
+    await prefs.setInt('totalEvents', _totalEvents);
   }
 
   Future<void> loadEventsFromLocalStorage() async {
@@ -35,21 +62,29 @@ class _HomeScreenState extends State<HomeScreen> {
 
     final prefs = await SharedPreferences.getInstance();
     final storedEventsJson = prefs.getString('events');
+    //print(' storedEventsJson  $storedEventsJson');
 
     if (storedEventsJson != null) {
       try {
         final List<dynamic> decodedData = jsonDecode(storedEventsJson);
         events = decodedData.map((json) => Events.fromJson(json)).toList();
-        //
+        _totalEvents = events.length;
+        _successCount = _countStatus(Type.SUCCESS);
+        _errorCount = _countStatus(Type.ERROR);
+        _warningCount = _countStatus(Type.WARNING);
+        _saveCountsToLocalStorage(); // Save counts after loading from local storage
+
         setState(() {
           isLoading = false;
           _filterEvents(); // pra filtrer les données
         });
+        //print('     : ${events.length} ');
       } catch (e) {
         setState(() {
           isLoading = false;
           errorMessage = 'problem fetching data';
         });
+        // print(' JSON: $e');
       }
     } else {
       setState(() {
@@ -100,13 +135,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (picked != null && picked != _fromDate) {
       setState(() {
         _fromDate = picked;
-        // if the end date is set and the new start date is after the end date, swap them
         if (_toDate != null && _fromDate!.isAfter(_toDate!)) {
           final temp = _fromDate;
           _fromDate = _toDate;
           _toDate = temp;
         }
-        _filterEvents(); //     for filter the data
+        _saveFilterDates();
+        _filterEvents();
       });
     }
   }
@@ -121,13 +156,13 @@ class _HomeScreenState extends State<HomeScreen> {
     if (picked != null && picked != _toDate) {
       setState(() {
         _toDate = picked;
-        //if the start date is set and the new end date is before the start date, swap them
         if (_fromDate != null && _toDate!.isBefore(_fromDate!)) {
           final temp = _toDate;
           _toDate = _fromDate;
           _fromDate = temp;
         }
-        _filterEvents(); //     for filter the data
+        _saveFilterDates();
+        _filterEvents();
       });
     }
   }
@@ -156,11 +191,19 @@ class _HomeScreenState extends State<HomeScreen> {
             }
             return false;
           }).toList();
+      _totalEvents = events.length;
+      _successCount = _countStatus(Type.SUCCESS);
+      _errorCount = _countStatus(Type.ERROR);
+      _warningCount = _countStatus(Type.WARNING);
     });
   }
 
   @override
   Widget build(BuildContext context) {
+    /*print(
+      'Building HomeScreen - isLoading: $isLoading, errorMessage: $errorMessage, events length: ${events.length}',
+    ); */
+
     return Scaffold(
       appBar: AppBar(title: Text('SmartAgri Radio')),
       body: Center(
@@ -178,7 +221,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       _fromDate == null
-                          ? '  choose the start date'
+                          ? '   choose the start date'
                           : 'Start: ${_fromDate!.day}-${_fromDate!.month}-${_fromDate!.year}',
                       style: TextStyle(
                         fontSize: 16,
@@ -194,7 +237,7 @@ class _HomeScreenState extends State<HomeScreen> {
                     padding: const EdgeInsets.all(8.0),
                     child: Text(
                       _toDate == null
-                          ? '  choose the end date'
+                          ? '   choose the end date'
                           : 'End: ${_toDate!.day}-${_toDate!.month}-${_toDate!.year}',
                       style: TextStyle(
                         fontSize: 16,
@@ -216,14 +259,16 @@ class _HomeScreenState extends State<HomeScreen> {
             else
               Column(
                 children: [
-                  Text(' Success number : ${_countStatus(Type.SUCCESS)}'),
-                  Text(' numbers of errors: ${_countStatus(Type.ERROR)}'),
-                  Text(' numbers WARNING : ${_countStatus(Type.WARNING)}'),
+                  Text(' Success number : $_successCount'),
+                  Text(' numbers of errors: $_errorCount'),
+                  Text(' numbers WARNING : $_warningCount'),
+                  Text(' Total Events: $_totalEvents'),
                   SizedBox(height: 20),
                   ElevatedButton(
                     onPressed: () {
                       _saveFilterDates(); //save the selected dates
                       _filterEvents(); //     practical application of the filter
+                      setState(() {}); // Force a rebuild of the UI
                     },
                     child: Text(' View Events'),
                   ),
@@ -241,20 +286,46 @@ class _HomeScreenState extends State<HomeScreen> {
       errorMessage = null;
     });
 
-    final List<Events>? fetchedEvents = await eventsService.getEvents();
+    try {
+      final List<Events>? fetchedEvents = await eventsService.getEvents();
 
-    setState(() {
-      isLoading = false;
-      if (fetchedEvents != null && fetchedEvents.isNotEmpty) {
-        events = fetchedEvents;
-        _saveEventsToLocalStorage(
-          fetchedEvents,
-        ); //Save the data in the Local Storage
-        _filterEvents(); //practical application of the filter
-      } else {
-        errorMessage = 'problem fetching data';
-      }
-    });
+      setState(() {
+        isLoading = false;
+        if (fetchedEvents != null && fetchedEvents.isNotEmpty) {
+          events = fetchedEvents;
+          _totalEvents = events.length;
+          _successCount = _countStatus(Type.SUCCESS);
+          _errorCount = _countStatus(Type.ERROR);
+          _warningCount = _countStatus(Type.WARNING);
+          _saveEventsToLocalStorage(fetchedEvents);
+          _saveCountsToLocalStorage();
+          _filterEvents();
+        } else if (_totalEvents == 0 && errorMessage == null) {
+          errorMessage = 'problem fetching data';
+        }
+      });
+    } on DioException catch (e) {
+      setState(() {
+        isLoading = false;
+        if (e.type == DioExceptionType.connectionError) {
+          //print('  ');
+          //     errorMessage
+        } else {
+          errorMessage = 'problem fetching data';
+        }
+      });
+    } on SocketException catch (e) {
+      setState(() {
+        isLoading = false;
+        print('SocketException : $e');
+        //     errorMessage
+      });
+    } catch (e) {
+      setState(() {
+        isLoading = false;
+        errorMessage = 'An unexpected error occurred';
+      });
+    }
   }
 
   Future<void> _saveEventsToLocalStorage(List<Events> events) async {
