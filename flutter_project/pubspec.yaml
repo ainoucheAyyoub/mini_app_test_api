@@ -1,0 +1,19 @@
+name: flutter_project
+description: A Flutter project to fetch and display events from an API.
+publish_to: 'none'
+
+environment:
+  sdk: '>=2.12.0 <3.0.0'
+
+dependencies:
+  flutter:
+    sdk: flutter
+  dio: ^5.0.0
+  pretty_dio_logger: ^1.0.0
+
+dev_dependencies:
+  flutter_test:
+    sdk: flutter
+
+flutter:
+  uses-material-design: true
