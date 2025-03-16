@@ -182,7 +182,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           : 'Start: ${_fromDate!.day}-${_fromDate!.month}-${_fromDate!.year}',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.transparent,
+                        color: Colors.blue,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
@@ -198,7 +198,7 @@ class _HomeScreenState extends State<HomeScreen> {
                           : 'End: ${_toDate!.day}-${_toDate!.month}-${_toDate!.year}',
                       style: TextStyle(
                         fontSize: 16,
-                        color: Colors.transparent,
+                        color: Colors.blue,
                         fontWeight: FontWeight.bold,
                       ),
                     ),
