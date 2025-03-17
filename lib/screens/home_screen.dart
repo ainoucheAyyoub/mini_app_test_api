@@ -282,34 +282,88 @@ class _HomeScreenState extends State<HomeScreen> {
 
   Future<void> fetchEvents() async {
     setState(() {
-      isLoading = true;
+      isLoading = false;
       errorMessage = null;
     });
 
     try {
       final List<Events>? fetchedEvents = await eventsService.getEvents();
 
-      setState(() {
-        isLoading = false;
-        if (fetchedEvents != null && fetchedEvents.isNotEmpty) {
-          events = fetchedEvents;
-          _totalEvents = events.length;
-          _successCount = _countStatus(Type.SUCCESS);
-          _errorCount = _countStatus(Type.ERROR);
-          _warningCount = _countStatus(Type.WARNING);
-          _saveEventsToLocalStorage(fetchedEvents);
-          _saveCountsToLocalStorage();
-          _filterEvents();
-        } else if (_totalEvents == 0 && errorMessage == null) {
-          errorMessage = 'problem fetching data';
+      if (fetchedEvents != null && fetchedEvents.isNotEmpty) {
+        final prefs = await SharedPreferences.getInstance();
+        final storedEventsJson = prefs.getString('events');
+        List<Events> localEvents = [];
+        if (storedEventsJson != null) {
+          final List<dynamic> decodedData = jsonDecode(storedEventsJson);
+          localEvents =
+              decodedData.map((json) => Events.fromJson(json)).toList();
         }
-      });
+
+        int newSuccessCount = 0;
+        int newErrorCount = 0;
+        int newWarningCount = 0;
+        int newTotalEvents = 0;
+        List<Events> newEventsToAdd = [];
+
+        // فلترة الأحداث الجديدة على حساب التاريخ
+        List<Events> filteredFetchedEvents =
+            fetchedEvents.where((event) {
+              final eventDate = event.date;
+              if (_fromDate == null && _toDate == null) return true;
+              if (_fromDate != null && _toDate != null) {
+                return eventDate != null &&
+                    (eventDate.isAtSameMomentAs(_fromDate!) ||
+                        eventDate.isAfter(_fromDate!)) &&
+                    (eventDate.isAtSameMomentAs(_toDate!) ||
+                        eventDate.isBefore(_toDate!));
+              }
+              if (_fromDate != null)
+                return eventDate != null &&
+                    (eventDate.isAtSameMomentAs(_fromDate!) ||
+                        eventDate.isAfter(_fromDate!));
+              if (_toDate != null)
+                return eventDate != null &&
+                    (eventDate.isAtSameMomentAs(_toDate!) ||
+                        eventDate.isBefore(_toDate!));
+              return false;
+            }).toList();
+
+        // التحقق من الأحداث الجديدة وإضافتها
+        for (var newEvent in filteredFetchedEvents) {
+          bool exists = localEvents.any(
+            (localEvent) => localEvent.id == newEvent.id,
+          );
+          if (!exists) {
+            newEventsToAdd.add(newEvent);
+            newTotalEvents++;
+            if (newEvent.type == Type.SUCCESS) newSuccessCount++;
+            if (newEvent.type == Type.ERROR) newErrorCount++;
+            if (newEvent.type == Type.WARNING) newWarningCount++;
+          }
+        }
+
+        // إضافة الأحداث الجديدة إلى القائمة المحلية وحفظها
+        localEvents.addAll(newEventsToAdd);
+        _saveEventsToLocalStorage(localEvents);
+
+        setState(() {
+          isLoading = false;
+          events = localEvents; // تحديث قائمة الأحداث المعروضة
+          _successCount += newSuccessCount;
+          _errorCount += newErrorCount;
+          _warningCount += newWarningCount;
+          _totalEvents += newTotalEvents;
+          _saveCountsToLocalStorage(); // حفظ الأعداد المحدثة
+        });
+      } else if (_totalEvents == 0 && errorMessage == null) {
+        errorMessage = 'problem fetching data';
+      }
     } on DioException catch (e) {
       setState(() {
         isLoading = false;
         if (e.type == DioExceptionType.connectionError) {
-          //print('  ');
-          //     errorMessage
+          print('لا يوجد اتصال بالإنترنت');
+          // هنا ما غاديش نغيروا errorMessage
         } else {
           errorMessage = 'problem fetching data';
         }
@@ -317,8 +371,8 @@ class _HomeScreenState extends State<HomeScreen> {
     } on SocketException catch (e) {
       setState(() {
         isLoading = false;
-        print('SocketException : $e');
-        //     errorMessage
+        print('SocketException وقع: $e');
+        // هنا ما غاديش نغيروا errorMessage
       });
     } catch (e) {
       setState(() {
