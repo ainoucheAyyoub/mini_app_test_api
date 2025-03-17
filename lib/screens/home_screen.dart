@@ -328,7 +328,6 @@ class _HomeScreenState extends State<HomeScreen> {
               return false;
             }).toList();
 
-        // التحقق من الأحداث الجديدة وإضافتها
         for (var newEvent in filteredFetchedEvents) {
           bool exists = localEvents.any(
             (localEvent) => localEvent.id == newEvent.id,
@@ -342,18 +341,17 @@ class _HomeScreenState extends State<HomeScreen> {
           }
         }
 
-        // إضافة الأحداث الجديدة إلى القائمة المحلية وحفظها
         localEvents.addAll(newEventsToAdd);
         _saveEventsToLocalStorage(localEvents);
 
         setState(() {
           isLoading = false;
-          events = localEvents; // تحديث قائمة الأحداث المعروضة
+          events = localEvents;
           _successCount += newSuccessCount;
           _errorCount += newErrorCount;
           _warningCount += newWarningCount;
           _totalEvents += newTotalEvents;
-          _saveCountsToLocalStorage(); // حفظ الأعداد المحدثة
+          _saveCountsToLocalStorage();
         });
       } else if (_totalEvents == 0 && errorMessage == null) {
         errorMessage = 'problem fetching data';
@@ -362,8 +360,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         isLoading = false;
         if (e.type == DioExceptionType.connectionError) {
-          print('لا يوجد اتصال بالإنترنت');
-          // هنا ما غاديش نغيروا errorMessage
+          print('  ');
         } else {
           errorMessage = 'problem fetching data';
         }
@@ -372,7 +369,7 @@ class _HomeScreenState extends State<HomeScreen> {
       setState(() {
         isLoading = false;
         print('SocketException وقع: $e');
-        // هنا ما غاديش نغيروا errorMessage
+        //     errorMessage
       });
     } catch (e) {
       setState(() {
